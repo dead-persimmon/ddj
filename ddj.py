@@ -4,8 +4,8 @@ from tkinter import ttk
 WORK_DIR = 'C:\\~ Downloads'
 SPECIAL_TITLES = []
 
-GROUP_TO_FILE_ID = None
-FILE_TO_GROUP_ID = None
+GROUP_TO_FILE_ID = {}
+FILE_TO_GROUP_ID = {}
 
 SELECTED_GROUPS = None
 SELECTED_FILES = None
@@ -135,13 +135,16 @@ delete_button = ttk.Button(buttons_frame, text = 'Delete')
 delete_button.pack(side = RIGHT, padx = (8, 0), pady = (8, 0))
 def delete_button_click():
     def delete_file(group_id, file_id):
-        import os
+        import os, stat
         global GROUP_TO_FILE_ID, tree, console_text
         file = GROUP_TO_FILE_ID[group_id][file_id]
         try:
+            #console_text.set('Attempting to delete (%s).' % file['path'])
+            os.chmod(file['path'], stat.S_IWRITE)
             os.remove(file['path'])
             return (1, file['size'])
-        except Exception:
+        except Exception as e:
+            print(e)
             return (0, 0)
     
     global tree, SELECTED_FILES, SELECTED_GROUPS, GROUP_TO_FILE_ID, console_text
@@ -187,8 +190,8 @@ def populate_tree(tree):
     from itertools import product
 
     global GROUP_TO_FILE_ID, FILE_TO_GROUP_ID
-    GROUP_TO_FILE_ID = {}
-    FILE_TO_GROUP_ID = {}
+    GROUP_TO_FILE_ID.clear()
+    FILE_TO_GROUP_ID.clear()
 
     groups = {}
     
@@ -222,10 +225,16 @@ def populate_tree(tree):
         
     for group in sorted(groups.values(), reverse = True, key = lambda x: x['size']):
         text_tag = group['title']
-        eps = list(group['episodes'])
-        if eps and sum(eps) == (eps[0] + eps[-1]) * len(eps) // 2:
-                text_tag += ' (%d ~ %d)' % (eps[0], eps[-1])
-                
+        episodes = list(group['episodes'])
+        if episodes:
+            ranges = []
+            index_a = 0
+            for index_b, (a, b) in enumerate(zip(episodes, episodes[1:] + [episodes[-1]])):
+                if b - a != 1:
+                    ranges.append((index_a, index_b))
+                    index_a = index_b + 1
+            text_tag += ' (%s)' % ', '.join('%d~%d' % (episodes[index_a], episodes[index_b]) if index_b - index_a else str(episodes[index_a]) for index_a, index_b in ranges)
+        
         group_id = tree.insert('', END, text = text_tag, values = (len(group['files']), group['size']))
         GROUP_TO_FILE_ID[group_id] = {}
         
@@ -248,4 +257,5 @@ def on_tree_selection_update(event):
 tree.bind('<<TreeviewSelect>>', on_tree_selection_update)
 
 #
+refresh_button_click()
 root.mainloop()
